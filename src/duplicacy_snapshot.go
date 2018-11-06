@@ -112,10 +112,31 @@ func CreateSnapshotFromDirectory(id string, top string, nobackupFile string) (sn
 	return snapshot, skippedDirectories, skippedFiles, nil
 }
 
+func AnalyzePattern(pattern string) (is_exclude bool, is_dir bool, is_regex bool) {
+	is_regex   = strings.HasPrefix(pattern, "e:") || strings.HasPrefix(pattern, "i:")
+	is_exclude = strings.HasPrefix(pattern, "e:") || strings.HasPrefix(pattern, "-")
+	is_dir     = strings.HasSuffix(pattern, "/") || strings.HasSuffix(pattern, "/$")
+	return is_exclude, is_dir, is_regex
+}
 func AppendPattern(patterns []string, new_pattern string) (new_patterns []string) {
+	_, new_is_dir, new_is_regex := AnalyzePattern(new_pattern)
+
 	for _, pattern := range patterns {
-		if pattern == new_pattern {
-			LOG_INFO("SNAPSHOT_FILTER", "Ignoring duplicate pattern: %s ...", new_pattern)
+		if pattern[1:] == new_pattern[1:] {
+			if pattern[0] == new_pattern[0] {
+				LOG_INFO("SNAPSHOT_FILTER", "Ignoring duplicate pattern: '%s' ...", new_pattern)
+			} else {
+				LOG_INFO("SNAPSHOT_FILTER", "Ignoring redundant pattern: '%s' ...", new_pattern)
+			}
+			return patterns
+		}
+		is_exclude, is_dir, is_regex := AnalyzePattern(pattern)
+		if (is_regex == new_is_regex)                     && // pattern type of both rules must match
+		   (is_exclude == is_dir)                         && // old rule is exclude directory or include file
+		   (is_dir || !is_regex)                          && // force directory rule for regex, since detection of file rule is not complete
+		   (is_dir || !new_is_dir)                        && // if old rule is include file, new rule must also be include file
+		   strings.HasPrefix(new_pattern[1:], pattern[1:]) { // pattern is prefix of new pattern
+			LOG_INFO("SNAPSHOT_FILTER", "Ignoring pattern: '%s' is ruled out by '%s'.", new_pattern,  pattern)
 			return patterns
 		}
 	}
