@@ -789,7 +789,7 @@ func restoreRepository(context *cli.Context) {
 	
 
 	}
-	patterns = duplicacy.ProcessFilterLines(patterns, make([]string, 0))
+	patterns = duplicacy.ProcessFilterLines(patterns, []string{ "-" })
 
 	duplicacy.LOG_DEBUG("REGEX_DEBUG", "There are %d compiled regular expressions stored", len(duplicacy.RegexMap))
 
