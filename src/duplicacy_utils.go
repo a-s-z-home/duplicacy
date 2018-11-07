@@ -65,6 +65,14 @@ func IsUnspecifiedFilter(pattern string) bool {
 	}
 }
 
+func SplitInternalFilter(pattern string) (string, string) {
+	if pattern[0] == '~' {
+		return pattern[1:], "~"
+	} else {
+		return pattern, ""
+	}
+}
+
 func IsValidRegex(pattern string) (valid bool, err error) {
 
 	var re *regexp.Regexp = nil
@@ -338,17 +346,22 @@ func MatchPath(filePath string, patterns []string) (included bool) {
 	var re *regexp.Regexp = nil
 	var found bool
 	var matched bool
+	var internal_marker string
 
 	allIncludes := true
 
 	for _, pattern := range patterns {
+		pattern, internal_marker = SplitInternalFilter(pattern)
+
 		if pattern[0] == '+' {
 			if matchPattern(filePath, pattern[1:]) {
 				LOG_DEBUG("PATTERN_INCLUDE", "%s is included by pattern %s", filePath, pattern)
 				return true
 			}
 		} else if pattern[0] == '-' {
-			allIncludes = false
+			if internal_marker != "" {
+				allIncludes = false
+			}
 			if matchPattern(filePath, pattern[1:]) {
 				LOG_DEBUG("PATTERN_EXCLUDE", "%s is excluded by pattern %s", filePath, pattern)
 				return false
@@ -375,7 +388,9 @@ func MatchPath(filePath string, patterns []string) (included bool) {
 				}
 			} else {
 				if strings.HasPrefix(pattern, "e:") {
-					allIncludes = false
+					if internal_marker != "" {
+						allIncludes = false
+					}
 				}
 			}
 		}

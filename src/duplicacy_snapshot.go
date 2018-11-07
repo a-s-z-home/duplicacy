@@ -146,11 +146,11 @@ func AppendPattern(patterns []string, new_pattern string) (new_patterns []string
 func ProcessFilters() (patterns []string) {
 	patternFileLines := []string{
 		`# ============================ exclude the internal files and directories in all ".duplicacy" subfolders`,
-		`e:(?i)(^|/)` + regexp.QuoteMeta(DUPLICACY_DIRECTORY) + `/cache/`,
-		`e:(?i)(^|/)` + regexp.QuoteMeta(DUPLICACY_DIRECTORY) + `/temporary$`,
+		`~e:(?i)(^|/)` + regexp.QuoteMeta(DUPLICACY_DIRECTORY) + `/cache/`,
+		`~e:(?i)(^|/)` + regexp.QuoteMeta(DUPLICACY_DIRECTORY) + `/temporary$`,
 		`# ============================ exclude the internal files and directories in toplevel ".duplicacy" subfolder`,
-		`e:(?i)^` + regexp.QuoteMeta(DUPLICACY_DIRECTORY) + `/incomplete$`,
-		`e:(?i)^` + regexp.QuoteMeta(DUPLICACY_DIRECTORY) + `/logs/`,
+		`~e:(?i)^` + regexp.QuoteMeta(DUPLICACY_DIRECTORY) + `/incomplete$`,
+		`~e:(?i)^` + regexp.QuoteMeta(DUPLICACY_DIRECTORY) + `/logs/`,
 		"@" + joinPath(GetDuplicacyPreferencePath(), "filters"),
 		}
 	LOG_DEBUG("SNAPSHOT_FILTER", "Adding standard filters ...")
@@ -187,6 +187,8 @@ func ProcessFilterFile(patternFile string, includedFiles []string) (patterns []s
 }
 
 func ProcessFilterLines(patternFileLines []string, includedFiles []string) (patterns []string) {
+	var internal_marker string
+	
 	for _, pattern := range patternFileLines {
 		pattern = strings.TrimSpace(pattern)
 		if len(pattern) == 0 {
@@ -217,6 +219,13 @@ func ProcessFilterLines(patternFileLines []string, includedFiles []string) (patt
 			continue
 		}
 
+		if len(includedFiles) < 1 {
+			pattern, internal_marker = SplitInternalFilter(pattern)
+		} else {
+			internal_marker = ""
+		}
+
+		
 		if IsUnspecifiedFilter(pattern) {
 			pattern = "+" + pattern
 		}
@@ -232,7 +241,7 @@ func ProcessFilterLines(patternFileLines []string, includedFiles []string) (patt
 			}
 		}
 
-		patterns = AppendPattern(patterns, pattern)
+		patterns = AppendPattern(patterns, internal_marker + pattern)
 	}
 
 	return patterns
