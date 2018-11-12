@@ -722,7 +722,7 @@ func (manager *BackupManager) Backup(top string, quickMode bool, threads int, ta
 // serve as a local cache to avoid download chunks available locally.  It is perfectly ok for 'base' to be
 // the same as 'top'.  'quickMode' will bypass files with unchanged sizes and timestamps.  'deleteMode' will
 // remove local files that don't exist in the snapshot. 'patterns' is used to include/exclude certain files.
-func (manager *BackupManager) Restore(top string, revision int, inPlace bool, quickMode bool, threads int, overwrite bool,
+func (manager *BackupManager) Restore(top string, revision int, inPlace bool, quickMode bool, threads int, existing string,
 	deleteMode bool, setOwner bool, showStatistics bool, patterns []string) bool {
 
 	startTime := time.Now().Unix()
@@ -921,7 +921,7 @@ func (manager *BackupManager) Restore(top string, revision int, inPlace bool, qu
 			continue
 		}
 
-		if manager.RestoreFile(chunkDownloader, chunkMaker, file, top, inPlace, overwrite, showStatistics,
+		if manager.RestoreFile(chunkDownloader, chunkMaker, file, top, inPlace, existing, showStatistics,
 			totalFileSize, downloadedFileSize, startDownloadingTime) {
 			downloadedFileSize += file.Size
 			downloadedFiles = append(downloadedFiles, file)
@@ -1128,7 +1128,7 @@ func (manager *BackupManager) UploadSnapshot(chunkMaker *ChunkMaker, uploader *C
 // Restore downloads a file from the storage.  If 'inPlace' is false, the download file is saved first to a temporary
 // file under the .duplicacy directory and then replaces the existing one.  Otherwise, the exising file will be
 // overwritten directly.
-func (manager *BackupManager) RestoreFile(chunkDownloader *ChunkDownloader, chunkMaker *ChunkMaker, entry *Entry, top string, inPlace bool, overwrite bool,
+func (manager *BackupManager) RestoreFile(chunkDownloader *ChunkDownloader, chunkMaker *ChunkMaker, entry *Entry, top string, inPlace bool, existing string,
 	showStatistics bool, totalFileSize int64, downloadedFileSize int64, startTime int64) bool {
 
 	LOG_TRACE("DOWNLOAD_START", "Downloading %s", entry.Path)
@@ -1205,7 +1205,7 @@ func (manager *BackupManager) RestoreFile(chunkDownloader *ChunkDownloader, chun
 			LOG_TRACE("DOWNLOAD_OPEN", "Can't open the existing file: %v", err)
 		}
 	} else {
-		if !overwrite {
+		if existing != "overwrite" {
 			LOG_ERROR("DOWNLOAD_OVERWRITE",
 				"File %s already exists.  Please specify the -overwrite option to continue", entry.Path)
 			return false

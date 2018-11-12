@@ -738,6 +738,21 @@ func restoreRepository(context *cli.Context) {
 		os.Exit(ArgumentExitCode)
 	}
 
+	overwrite := context.Bool("overwrite")
+
+	possibleValues := []string{"overwrite", "skip", "rename", "abort"}
+	existing := "abort"
+	if overwrite {
+		existing = "overwrite"
+	}
+	if context.IsSet("existing") {
+		if !duplicacy.Contains(possibleValues, existing) {
+			fmt.Fprintf(context.App.Writer, "The existing flag is invalid\nPossible values: %s\n", strings.Join(possibleValues, ", "))
+			cli.ShowCommandHelp(context, context.Command.Name)
+			os.Exit(ArgumentExitCode)
+		}
+	}
+
 	repository, preference := getRepositoryPreference(context, "")
 
 	if preference.RestoreProhibited {
@@ -765,7 +780,6 @@ func restoreRepository(context *cli.Context) {
 	}
 
 	quickMode := !context.Bool("hash")
-	overwrite := context.Bool("overwrite")
 	deleteMode := context.Bool("delete")
 	setOwner := !context.Bool("ignore-owner")
 
@@ -810,7 +824,7 @@ func restoreRepository(context *cli.Context) {
 	duplicacy.SavePassword(*preference, "password", password)
 
 	backupManager.SetupSnapshotCache(preference.Name)
-	backupManager.Restore(repository, revision, true, quickMode, threads, overwrite, deleteMode, setOwner, showStatistics, patterns)
+	backupManager.Restore(repository, revision, true, quickMode, threads, existing, deleteMode, setOwner, showStatistics, patterns)
 
 	runScript(context, preference.Name, "post")
 }
@@ -1440,6 +1454,14 @@ func main() {
 					Name:  "overwrite",
 					Usage: "overwrite existing files in the repository",
 				},
+				cli.StringFlag{
+					Name:  "existing",
+					Usage: "howto handle conflicts with local existing files `MODE` [overwrite|skip|rename|abort]",
+				},
+				//cli.BoolFlag{
+				//	Name:  "dry-run",
+				//	Usage: "dry run for testing, don't restore anything. Use with -stats",
+				//},
 				cli.BoolFlag{
 					Name:  "delete",
 					Usage: "delete files not in the snapshot",
