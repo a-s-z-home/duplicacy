@@ -901,20 +901,58 @@ func (manager *BackupManager) Restore(top string, revision int, inPlace bool, qu
 
 	var downloadedFiles []*Entry
 	// Now download files one by one
-	for _, file := range fileEntries {
+	for index, file := range fileEntries {
 
+		filePath := file.Path
 		fullPath := joinPath(top, file.Path)
 		stat, _ := os.Stat(fullPath)
+		if stat != nil && existing == RenameExisting {
+			fileExt := filepath.Ext(filePath)
+			fileBase := filePath[0:len(filePath)-len(fileExt)-1]
+			idx := 1
+			for idx < 100 {
+				filePath = fileBase + "." + strconv.Itoa(idx) + fileExt
+				for index < len(fileEntries) {
+					if fileEntries[index].Path == filePath {
+						filePath = ""
+						break
+					}
+					index++
+				}
+				if filePath != "" {
+					fullPath := joinPath(top, filePath)
+					stat, _ := os.Stat(fullPath)
+					if stat == nil {
+						LOG_TRACE("RESTORE_RENAME", "Renamed restored file %s => %s.", file.Path, filepath.Base(filePath))
+						break
+					}
+					filePath = ""
+				}
+				idx++
+			}
+			if filePath == "" {
+				LOG_TRACE("RESTORE_SKIP", "Skipped existing file %s (no alternative found).", file.Path)
+				continue
+			}
+		}
 		if stat != nil {
+			if existing == SkipExisting {
+				LOG_TRACE("RESTORE_SKIP", "Skipped existing file %s.", filePath)
+				continue
+			}
+			if existing == AbortAction {
+				LOG_TRACE("RESTORE_ABORT", "Aborting restore because file %s exists.", filePath)
+				return false
+			}
 			if quickMode {
 				if file.IsSameAsFileInfo(stat) {
-					LOG_TRACE("RESTORE_SKIP", "File %s unchanged (by size and timestamp)", file.Path)
+					LOG_TRACE("RESTORE_SKIP", "File %s unchanged (by size and timestamp)", filePath)
 					continue
 				}
 			}
 
 			if file.Size == 0 && file.IsSameAsFileInfo(stat) {
-				LOG_TRACE("RESTORE_SKIP", "File %s unchanged (size 0)", file.Path)
+				LOG_TRACE("RESTORE_SKIP", "File %s unchanged (size 0)", filePath)
 				continue
 			}
 		} else {
@@ -941,7 +979,7 @@ func (manager *BackupManager) Restore(top string, revision int, inPlace bool, qu
 			continue
 		}
 
-		if manager.RestoreFile(chunkDownloader, chunkMaker, file, top, inPlace, existing, showStatistics,
+		if manager.RestoreFile(chunkDownloader, chunkMaker, file, top, inPlace, existing == OverwriteExisting, showStatistics,
 			totalFileSize, downloadedFileSize, startDownloadingTime) {
 			downloadedFileSize += file.Size
 			downloadedFiles = append(downloadedFiles, file)
@@ -1148,7 +1186,7 @@ func (manager *BackupManager) UploadSnapshot(chunkMaker *ChunkMaker, uploader *C
 // Restore downloads a file from the storage.  If 'inPlace' is false, the download file is saved first to a temporary
 // file under the .duplicacy directory and then replaces the existing one.  Otherwise, the exising file will be
 // overwritten directly.
-func (manager *BackupManager) RestoreFile(chunkDownloader *ChunkDownloader, chunkMaker *ChunkMaker, entry *Entry, top string, inPlace bool, existing ExistingChoice,
+func (manager *BackupManager) RestoreFile(chunkDownloader *ChunkDownloader, chunkMaker *ChunkMaker, entry *Entry, top string, inPlace bool, overwrite bool,
 	showStatistics bool, totalFileSize int64, downloadedFileSize int64, startTime int64) bool {
 
 	LOG_TRACE("DOWNLOAD_START", "Downloading %s", entry.Path)
@@ -1225,9 +1263,9 @@ func (manager *BackupManager) RestoreFile(chunkDownloader *ChunkDownloader, chun
 			LOG_TRACE("DOWNLOAD_OPEN", "Can't open the existing file: %v", err)
 		}
 	} else {
-		if existing != OverwriteExisting {
+		if !overwrite {
 			LOG_ERROR("DOWNLOAD_OVERWRITE",
-				"File %s already exists.  Please specify the -overwrite option to continue", entry.Path)
+				"File %s already exists.  Please specify the -existing=overwrite option to continue", entry.Path)
 			return false
 		}
 	}
