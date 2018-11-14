@@ -717,12 +717,32 @@ func (manager *BackupManager) Backup(top string, quickMode bool, threads int, ta
 	return true
 }
 
+type ExistingChoice int
+
+func (pn ExistingChoice) Set(val int) {
+	pn = ExistingChoice(val)
+}
+func (pn ExistingChoice) String() string {
+	return existingChoices[pn]
+}
+func (pn ExistingChoice) Values() *[]string {
+	return &existingChoices
+}
+
+const (
+	AbortAction ExistingChoice = iota
+	OverwriteExisting
+	SkipExisting
+	RenameExisting	
+)
+var existingChoices = []string{"abort", "overwrite", "skip", "rename"}
+
 // Restore downloads the specified snapshot, compares it with what's on the repository, and then downloads
 // files that are different. 'base' is a directory that contains files at a different revision which can
 // serve as a local cache to avoid download chunks available locally.  It is perfectly ok for 'base' to be
 // the same as 'top'.  'quickMode' will bypass files with unchanged sizes and timestamps.  'deleteMode' will
 // remove local files that don't exist in the snapshot. 'patterns' is used to include/exclude certain files.
-func (manager *BackupManager) Restore(top string, revision int, inPlace bool, quickMode bool, threads int, existing string,
+func (manager *BackupManager) Restore(top string, revision int, inPlace bool, quickMode bool, threads int, existing ExistingChoice,
 	deleteMode bool, setOwner bool, showStatistics bool, patterns []string) bool {
 
 	startTime := time.Now().Unix()
@@ -1128,7 +1148,7 @@ func (manager *BackupManager) UploadSnapshot(chunkMaker *ChunkMaker, uploader *C
 // Restore downloads a file from the storage.  If 'inPlace' is false, the download file is saved first to a temporary
 // file under the .duplicacy directory and then replaces the existing one.  Otherwise, the exising file will be
 // overwritten directly.
-func (manager *BackupManager) RestoreFile(chunkDownloader *ChunkDownloader, chunkMaker *ChunkMaker, entry *Entry, top string, inPlace bool, existing string,
+func (manager *BackupManager) RestoreFile(chunkDownloader *ChunkDownloader, chunkMaker *ChunkMaker, entry *Entry, top string, inPlace bool, existing ExistingChoice,
 	showStatistics bool, totalFileSize int64, downloadedFileSize int64, startTime int64) bool {
 
 	LOG_TRACE("DOWNLOAD_START", "Downloading %s", entry.Path)
@@ -1205,7 +1225,7 @@ func (manager *BackupManager) RestoreFile(chunkDownloader *ChunkDownloader, chun
 			LOG_TRACE("DOWNLOAD_OPEN", "Can't open the existing file: %v", err)
 		}
 	} else {
-		if existing != "overwrite" {
+		if existing != OverwriteExisting {
 			LOG_ERROR("DOWNLOAD_OVERWRITE",
 				"File %s already exists.  Please specify the -overwrite option to continue", entry.Path)
 			return false

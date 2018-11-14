@@ -740,17 +740,11 @@ func restoreRepository(context *cli.Context) {
 
 	overwrite := context.Bool("overwrite")
 
-	possibleValues := []string{"overwrite", "skip", "rename", "abort"}
-	existing := "abort"
-	if overwrite {
-		existing = "overwrite"
-	}
+	existing := duplicacy.AbortAction
 	if context.IsSet("existing") {
-		if !duplicacy.Contains(possibleValues, existing) {
-			fmt.Fprintf(context.App.Writer, "The existing flag is invalid\nPossible values: %s\n", strings.Join(possibleValues, ", "))
-			cli.ShowCommandHelp(context, context.Command.Name)
-			os.Exit(ArgumentExitCode)
-		}
+		existing = context.Generic("existing").(*existingFlag).Value;
+	} else if overwrite {
+		existing = duplicacy.OverwriteExisting;
 	}
 
 	repository, preference := getRepositoryPreference(context, "")
@@ -1326,6 +1320,29 @@ func benchmark(context *cli.Context) {
 	duplicacy.Benchmark(repository, storage, int64(fileSize) * 1000000, chunkSize * 1024 * 1024, chunkCount, uploadThreads, downloadThreads)
 }
 
+type existingFlag struct {
+	Value duplicacy.ExistingChoice
+}
+
+func (pn *existingFlag) Choices() []string { return *pn.Value.Values() }
+
+func (pn *existingFlag) String() string { return pn.Value.String() }
+
+func (pn *existingFlag) Set(value string) error {
+	if value == "" {
+		pn.Value.Set(0)
+		return nil
+	}
+	possibleValues := pn.Choices()
+	for idx, val := range possibleValues {
+		if strings.EqualFold(val, value) {
+			pn.Value.Set(idx)
+			return nil
+		}
+	}
+	return fmt.Errorf("Possible values: %v", possibleValues)
+}
+
 func main() {
 
 	duplicacy.SetLoggingLevel(duplicacy.INFO)
@@ -1454,9 +1471,11 @@ func main() {
 					Name:  "overwrite",
 					Usage: "overwrite existing files in the repository",
 				},
-				cli.StringFlag{
+				cli.GenericFlag{
 					Name:  "existing",
-					Usage: "howto handle conflicts with local existing files `MODE` [overwrite|skip|rename|abort]",
+					Usage: "howto handle conflicts with local existing files `MODE`",
+					Value: &existingFlag{},
+					Arg:   strings.Join(*existingFlag{}.Value.Values(), "|"),
 				},
 				//cli.BoolFlag{
 				//	Name:  "dry-run",
